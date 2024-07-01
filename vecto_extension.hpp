@@ -20,7 +20,7 @@ namespace kwk
             >
     constexpr auto transform(Context &ctx, Func &&f, Out& out, C0 const& c0, Cs const&... cs)
     {
-        if constexpr (Out::preserve_reachability && C0::preserve_reachability &&(Cs::preserve_reachability && ...))
+        if constexpr (Out::preserve_reachability && C0::preserve_reachability && (Cs::preserve_reachability && ...))
         {   //We suppose every one is the same size (might need to change)
             auto sz = out.numel();
             auto r_out = make_range(out.get_data(), sz);
@@ -54,13 +54,13 @@ namespace kwk
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
-            auto ext = kumi::get<0>(s);                             // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s));               // Inner part
-            auto acc = 0;                                           //Not sure tho
+            auto ext = kumi::get<0>(s);                             
+            auto inn = kumi::get<0>(kumi::get<1>(s));               
+            auto acc = 0;                                           
             kwk::__::for_each([&](auto... is)
             {
                 auto r_in = make_range(&in(is...,0), inn);
-                acc += eve::algo::reduce(r_in, typename In::value_type{});
+                acc = eve::algo::reduce(r_in, acc);
             }, ext);
             
             return acc;
@@ -69,23 +69,23 @@ namespace kwk
 
     //     
     template<typename Context, typename Op, typename Id, concepts::container In>
-    constexpr auto reduce(Context& ctx, In const& in, std::pair<Op, Id> op_id, auto init)
+    constexpr auto reduce(Context& ctx, In const& in, std::pair<Op, Id> R, auto init)
     {
         if constexpr (In::preserve_reachability)
         {
             auto r_in = make_range(in.get_data(), in.numel());
-            return eve::algo::reduce(r_in, op_id, init);
+            return eve::algo::reduce(r_in, R, init);
         }
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
-            auto ext = kumi::get<0>(s);                             // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s));               // Inner part
-            auto acc = 0;                                           //Not sure tho
+            auto ext = kumi::get<0>(s);                             
+            auto inn = kumi::get<0>(kumi::get<1>(s));               
+            auto acc = init;                                           
             kwk::__::for_each([&](auto... is)
             {
                 auto r_in = make_range(&in(is...,0), inn);
-                acc += eve::algo::reduce(r_in, op_id, init);
+                acc = eve::algo::reduce(r_in, R, acc);
             }, ext);
             
             return acc;
@@ -110,16 +110,16 @@ namespace kwk
         else
         {
             auto s   = kumi::split(in1.shape(), kumi::index<In::static_order -1>);
-            auto ext = kumi::get<0>(s);                             // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s));               // Inner part
-            auto acc = 0;                                           //Not sure tho
+            auto ext = kumi::get<0>(s);                             
+            auto inn = kumi::get<0>(kumi::get<1>(s));               
+            auto acc = init;                                           
             kwk::__::for_each([&](auto... is)
             {
                 auto r_in1 = make_range(&in1(is...,0), inn);
                 auto r_in2 = make_range(&in2(is...,0), inn);
                 auto zipped = eve::views::zip(r_in1, r_in2);
 
-                acc += eve::algo::transform_reduce(zipped, [&T](auto const& in){return kumi::apply(T, in);}, R, init);
+                acc = eve::algo::transform_reduce(zipped, [&T](auto const& in){return kumi::apply(T, in);}, R, acc);
    
             }, ext);
             
@@ -136,14 +136,43 @@ namespace kwk
     }
 
     //
-    template<>
-    constexpr auto transform_exclusive_scan()
+    template<typename Context, typename Op, typename Id, typename Func_T,
+            concepts::container In, concepts::container Out>
+    constexpr auto transform_inclusive_scan(Context& ctx, In const& in, Out& out, auto init, std::pair<Op, Id> S, Func_T T)
+    {
+        kwk::transform("simd", T, out, in);
+      
+        if constexpr (In::preserve_reachability && Out::preserve_reachability)
+        {
+            auto r_out = make_range(out.get_data(), out.numel());
+            eve::algo::inclusive_scan_inplace(r_out, S, init);
+        }
+        else
+        {
+            auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
+            auto ext = kumi::get<0>(s);               
+            auto inn = kumi::get<0>(kumi::get<1>(s)); 
+            kwk::__::for_each([&](auto... is)
+            {
+                auto r_out = make_range(&out(is...,0), inn);
+                eve::algo::inclusive_scan_inplace(r_out, S, init);
+            }, ext);
+        }
+    }
 
-    template<>
-    constexpr auto transform_inclusive_scan()
+    //
+    template<typename Context, typename Op, typename Id, typename Func_T,
+            concepts::container In, concepts::container Out>
+    constexpr auto transform_exclusive_scan(Context& ctx, In const& in, Out &out, auto init, std::pair<Op, Id> S, Func_T T)
+    {
+        kwk::transform("simd", T, out, in);
+        auto r_in  = make_range(in.get_data(), in.numel());
+        auto r_out = make_range(out.get_data(), out.numel());
+        eve::algo::inclusive_scan_to(r_in, r_out, S, init);
+    }
 
     /************************ Copy *********************************/
-    //Copy
+    //
     template<typename Context, concepts::container Out, concepts::container In>
     constexpr auto copy(Context& ctx, Out& out, In const& in)
     {
@@ -156,8 +185,8 @@ namespace kwk
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
-            auto ext = kumi::get<0>(s);                // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s)); // Inner part
+            auto ext = kumi::get<0>(s);                
+            auto inn = kumi::get<0>(kumi::get<1>(s)); 
             kwk::__::for_each([&](auto... is)
             {
                 auto r_in  = make_range(&in(is...,0), inn);
@@ -182,8 +211,8 @@ namespace kwk
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
-            auto ext = kumi::get<0>(s);                             // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s));               // Inner part
+            auto ext = kumi::get<0>(s);                             
+            auto inn = kumi::get<0>(kumi::get<1>(s));              
             kwk::__::for_each([&](auto... is)
             {
                 auto r_in  = make_range(&in(is...,0), inn);
@@ -194,7 +223,7 @@ namespace kwk
     }
 
     /********************* Predicates *********************************/
-    // Verify return value brother
+    // 
     template<typename Context, typename Func,
              concepts::container In
             >
@@ -208,8 +237,8 @@ namespace kwk
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
-            auto ext = kumi::get<0>(s);                // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s));  // Inner part
+            auto ext = kumi::get<0>(s);                
+            auto inn = kumi::get<0>(kumi::get<1>(s));  
             bool b   = true;
 
             kwk::__::for_each([&](auto... is)
@@ -236,8 +265,8 @@ namespace kwk
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
-            auto ext = kumi::get<0>(s);                 // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s));   // Inner part
+            auto ext = kumi::get<0>(s);                
+            auto inn = kumi::get<0>(kumi::get<1>(s)); 
             bool b   = true;
 
             kwk::__::for_each([&](auto... is)
@@ -264,8 +293,8 @@ namespace kwk
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
-            auto ext = kumi::get<0>(s);                // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s)); // Inner part
+            auto ext = kumi::get<0>(s);              
+            auto inn = kumi::get<0>(kumi::get<1>(s)); 
             bool b   = true;
 
             kwk::__::for_each([&](auto... is)
@@ -290,26 +319,39 @@ namespace kwk
     template<typename Context, concepts::container In, typename Func>
     constexpr auto find_if(Context& ctx, In const& in, Func f)
     {
+        auto c = kumi::generate<In::static_order, std::ptrdiff_t>(0);
+        using coords_t = decltype(c);
+
         if constexpr (In::preserve_reachability)
         {
             auto r_in = make_range(in.get_data(), in.numel());
-            auto res  = eve::algo::find_if(r_in, f);
-            return kumi::make_tuple(res - r_in.begin());
+            auto find = eve::algo::find_if(r_in, f);
+            if(find < r_in.end())
+            {
+                auto linear_pos  = find - r_in.begin();
+                auto pos = kwk::coordinates(linear_pos, in.shape());
+                return std::optional<coords_t>{kumi::to_tuple(pos)};
+            }
+            return std::optional<coords_t>{std::nullopt};
         }
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
-            auto ext = kumi::get<0>(s);                 // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s));   // Inner part
-            auto pos = kumi::generate<In::static_order>(-1);
-
+            auto ext = kumi::get<0>(s);                 
+            auto inn = kumi::get<0>(kumi::get<1>(s));   
+            auto pos = std::optional<coords_t>{std::nullopt};
+            auto rmd = in.get_data();
+            
             kwk::__::for_until([&](auto... is)
             {
                 auto r_in = make_range(&in(is...,0), inn);
-                auto res  = eve::algo::find_if(r_in, f);
-                if(res != r_in.end())
+                auto find = eve::algo::find_if(r_in, f);
+                if(find < r_in.end())
                 {
-                    pos = kumi::make_tuple(res - r_in.begin());
+                    auto linear_pos = find - rmd;
+                    auto kwk_pos = kwk::coordinates(linear_pos, in.shape());
+                    pos = kumi::to_tuple(kwk_pos);
+
                     return true;
                 }
                 return false;
@@ -340,33 +382,47 @@ namespace kwk
     template<typename Context, concepts::container In>
     constexpr auto find_last(Context& ctx, In const& in, auto value)
     {
-        return find_last_if("exit", in, [&](auto e){return e == value;});
+        return find_last_if("simd", in, [&](auto e){return e == value;});
     }
 
     //
     template<typename Context, concepts::container In, typename Func>
     constexpr auto find_last_if(Context& ctx, In const& in, Func f)
     {
+        auto c = kumi::generate<In::static_order, std::ptrdiff_t>(0);
+        using coords_t = decltype(c);
+
         if constexpr (In::preserve_reachability)
         {
             auto r_in = make_range(in.get_data(), in.numel());
-            auto res  = eve::algo::find_last_if(r_in, f);
-            return kumi::make_tuple(res - r_in.begin());
+            auto find = eve::algo::find_last_if(r_in, f);
+            if(find < r_in.end())
+            {
+                auto linear_pos  = find - r_in.begin();
+                auto pos = kwk::coordinates(linear_pos, in.shape());
+                return std::optional<coords_t>{kumi::to_tuple(pos)};
+            }
+            // Temporary
+            return std::optional<coords_t>{std::nullopt};
         }
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
-            auto ext = kumi::get<0>(s);                 // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s));   // Inner part
+            auto ext = kumi::get<0>(s);                 
+            auto inn = kumi::get<0>(kumi::get<1>(s));   
             auto pos = kumi::generate<In::static_order>(-1);
+            auto rmd = in.get_data();
 
             kwk::__::for_until([&](auto... is)
             {
                 auto r_in = make_range(&in(is...,0), inn);
-                auto res  = eve::algo::find_last_if(r_in, f);
-                if(res != r_in.end())
+                auto find = eve::algo::find_last_if(r_in, f);
+                if(find < r_in.end())
                 {
-                    pos = kumi::make_tuple(res - r_in.begin());
+                    auto linear_pos = find - rmd;
+                    auto kwk_pos = kwk::coordinates(linear_pos, in.shape());
+                    pos = kumi::to_tuple(kwk_pos);
+
                     return true;
                 }
                 return false;
@@ -396,8 +452,8 @@ namespace kwk
         else
         {
             auto s   = kumi::split(inout.shape(), kumi::index<Inout::static_order -1>);
-            auto ext = kumi::get<0>(s);                // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s)); // Inner part
+            auto ext = kumi::get<0>(s);                
+            auto inn = kumi::get<0>(kumi::get<1>(s)); 
 
             kwk::__::for_each([&](auto... is)
             {
@@ -408,32 +464,41 @@ namespace kwk
     }
 
     //
-    template<typename Context, typename Func, concepts::container Inout>
-    constexpr auto generate(Context &ctx, Func f, Inout& inout)
+    template<typename Context, typename Generator, concepts::container Inout>
+    constexpr auto generate(Context &ctx, Generator g, Inout& inout)
     {
         if constexpr (Inout::preserve_reachability)
         {
             auto r_inout = make_range(inout.get_data(), inout.numel());
-            eve::algo::transform_inplace(r_inout, f);
+            eve::algo::transform_to(eve::views::iota(0), r_inout,
+                    [&](auto iota)
+                    {
+                        return g(iota);
+                    });
         }
         else
         {
             auto s   = kumi::split(inout.shape(), kumi::index<Inout::static_order -1>);
-            auto ext = kumi::get<0>(s);                // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s)); // Inner part
-
+            auto ext = kumi::get<0>(s);                
+            auto inn = kumi::get<0>(kumi::get<1>(s)); 
+            auto acc = 0;
             kwk::__::for_each([&](auto... is)
             {
                 auto r_inout = make_range(&inout(is...,0), inn);
-                eve::algo::transform_inplace(r_inout, f);
-            }, ext);
+                eve::algo::transform_to(eve::views::iota(acc), r_inout,
+                    [&](auto iota)
+                    {
+                        acc += inn;
+                        return g(iota);
+                    });
 
+            }, ext);
         }
     }
 
     //
     template<typename Context, concepts::container Inout>
-    constexpr auto iota (Inout& inout, auto value)
+    constexpr auto iota (Context& ctx, Inout& inout, auto value)
     {
         if constexpr (Inout::preserve_reachability)
         {
@@ -443,37 +508,46 @@ namespace kwk
         else
         {
             auto s   = kumi::split(inout.shape(), kumi::index<Inout::static_order -1>);
-            auto ext = kumi::get<0>(s);                // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s)); // Inner part
-
+            auto ext = kumi::get<0>(s);                
+            auto inn = kumi::get<0>(kumi::get<1>(s)); 
+            auto acc = value; 
             kwk::__::for_each([&](auto... is)
             {
                 auto r_inout = make_range(&inout(is...,0), inn);
-                eve::algo::iota(r_inout, value);
+                eve::algo::iota(r_inout, acc);
+                acc += inn;
             }, ext);
-
         }
     }
 
     //
     template<typename Context, concepts::container Inout>
-    constexpr auto iota (Inout& inout, auto value, auto step)
+    constexpr auto iota (Context& ctx, Inout& inout, auto value, auto step)
     {
         if constexpr (Inout::preserve_reachability)
         {
             auto r_inout = make_range(inout.get_data(), inout.numel());
-            eve::views::iota_with_step(value, step, r_inout);
+            eve::algo::transform_to(eve::views::iota_with_step(value, step), r_inout,
+                    [&](auto iota)
+                    {
+                        return iota;
+                    });
         }
         else
         {
             auto s   = kumi::split(inout.shape(), kumi::index<Inout::static_order -1>);
-            auto ext = kumi::get<0>(s);                             // Extern part
-            auto inn = kumi::get<0>(kumi::get<1>(s));               // Inner part
-
+            auto ext = kumi::get<0>(s);                
+            auto inn = kumi::get<0>(kumi::get<1>(s)); 
+            auto acc = value;
             kwk::__::for_each([&](auto... is)
             {
                 auto r_inout = make_range(&inout(is...,0), inn);
-                eve::views::iota_with_step(value, step, r_inout);
+                eve::algo::transform_to(eve::views::iota_with_step(acc, step), r_inout,
+                    [&](auto iota)
+                    {
+                        return iota;
+                    });
+                acc += step*inn;
             }, ext);
         }
     }

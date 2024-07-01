@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_compile_options(-Wall -O3 -march=native -g)
+add_compile_options(-Wall -Wconversion -O3 -march=native -g)
 
 find_package(eve CONFIG REQUIRED)
 find_package(kiwaku CONFIG REQUIRED)

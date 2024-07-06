@@ -88,7 +88,6 @@ int main(int argc, char **argv)
     auto find2 = kwk::find_if("simd", a_kwk, [](auto e){return e == 5;});
     if(find2)
         std::cout << "Find_if          : "<< find1bis <<  " | " << *find2 << "\n";
-    
 
     auto find3 = kwk::find_if_not("simd", a_kwk, [](auto a){return a <= 4 ;});
     auto find3bis = kwk::find_if_not(a_kwk, [](auto a){return a <= 4;});
@@ -112,7 +111,8 @@ int main(int argc, char **argv)
     
     auto find7 = kwk::find_first_of("simd", a_kwk, a_kwk);
     auto find7_2 = kwk::find_first_of(a_kwk, a_kwk);
-    std::cout << "Find_first_of    : "<< find7_2 << " | " << find7 << "\n";
+    if(find7)
+        std::cout << "Find_first_of    : "<< find7_2 << " | " << *find7 << "\n";
 
     kwk::fill("simd", b_kwk, 1.0f);
     kwk::fill(c_kwk, 1.0f);
@@ -129,5 +129,6 @@ int main(int argc, char **argv)
     kwk::iota("simd", b_kwk, 5, 2);
     kwk::iota(c_kwk, 5, 2);
     std::cout << "Iota             :\n" << c_kwk << b_kwk << "\n";
+
     return 0;
 }

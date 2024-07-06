@@ -1,3 +1,5 @@
+#pragma once
+
 #include <kumi/tuple.hpp>
 #include <kwk/kwk.hpp>
 #include <eve/eve.hpp>
@@ -13,18 +15,20 @@ namespace kwk
         return eve::algo::as_range(p, p+n);
     }
 
+
     /********************* Transform  *********************************/
     // Context signature isnt correct ofc (simplified)
     template<typename Context, typename Func, concepts::container Out
             ,concepts::container C0, concepts::container... Cs
             >
-    constexpr auto transform(Context &ctx, Func &&f, Out& out, C0 const& c0, Cs const&... cs)
+    constexpr auto transform([[maybe_unused]] Context &ctx, Func &&f, Out& out, C0 const& c0, Cs const&... cs)
     {
         if constexpr (Out::preserve_reachability && C0::preserve_reachability && (Cs::preserve_reachability && ...))
-        {   //We suppose every one is the same size (might need to change)
+        {   
             auto sz = out.numel();
             auto r_out = make_range(out.get_data(), sz);
             auto zipped = eve::views::zip(make_range(c0.get_data(), sz), make_range(cs.get_data(), sz)...);
+            
             eve::algo::transform_to(zipped, r_out, [&f](auto const &in){return kumi::apply(f, in);});
         }
         else 
@@ -44,7 +48,7 @@ namespace kwk
     /********************* Reductions *********************************/
     //
     template<typename Context, concepts::container In>
-    constexpr auto reduce(Context &ctx, In const& in)
+    constexpr auto reduce([[maybe_unused]] Context &ctx, In const& in)
     {
         if constexpr (In::preserve_reachability)
         {
@@ -69,7 +73,7 @@ namespace kwk
 
     //     
     template<typename Context, typename Op, typename Id, concepts::container In>
-    constexpr auto reduce(Context& ctx, In const& in, std::pair<Op, Id> R, auto init)
+    constexpr auto reduce([[maybe_unused]] Context& ctx, In const& in, std::pair<Op, Id> R, auto init)
     {
         if constexpr (In::preserve_reachability)
         {
@@ -94,10 +98,10 @@ namespace kwk
 
     /********************* Numeric *********************************/
 
-    // Fixed Reduction operation as eve one is suspicious || Might have to come back to this
+    // 
     template<typename Context, typename Op, typename Id, typename Func_T, 
             concepts::container In>
-    constexpr auto transform_reduce(Context& ctx, In const& in1, In const& in2, auto init, std::pair<Op, Id> R, Func_T T)
+    constexpr auto transform_reduce([[maybe_unused]] Context& ctx, In const& in1, In const& in2, auto init, std::pair<Op, Id> R, Func_T T)
     {
         if constexpr (In::preserve_reachability)
         {
@@ -130,7 +134,7 @@ namespace kwk
     //
     template<typename Context, typename Op, typename Id, typename Func_T, 
             concepts::container In>
-    constexpr auto inner_product(Context& ctx, In const& in1, In const& in2, auto init, std::pair<Op, Id> R, Func_T T)
+    constexpr auto inner_product([[maybe_unused]] Context& ctx, In const& in1, In const& in2, auto init, std::pair<Op, Id> R, Func_T T)
     {
         return kwk::transform_reduce(ctx, in1, in2, init, R, T);
     }
@@ -138,11 +142,11 @@ namespace kwk
     //
     template<typename Context, typename Op, typename Id, typename Func_T,
             concepts::container In, concepts::container Out>
-    constexpr auto transform_inclusive_scan(Context& ctx, In const& in, Out& out, auto init, std::pair<Op, Id> S, Func_T T)
+    constexpr auto transform_inclusive_scan([[maybe_unused]] Context& ctx, In const& in, Out& out, auto init, std::pair<Op, Id> S, Func_T T)
     {
         kwk::transform("simd", T, out, in);
       
-        if constexpr (In::preserve_reachability && Out::preserve_reachability)
+        if constexpr (Out::preserve_reachability && In::preserve_reachability)
         {
             auto r_out = make_range(out.get_data(), out.numel());
             eve::algo::inclusive_scan_inplace(r_out, S, init);
@@ -163,18 +167,40 @@ namespace kwk
     //
     template<typename Context, typename Op, typename Id, typename Func_T,
             concepts::container In, concepts::container Out>
-    constexpr auto transform_exclusive_scan(Context& ctx, In const& in, Out &out, auto init, std::pair<Op, Id> S, Func_T T)
+    constexpr auto transform_exclusive_scan([[maybe_unused]] Context& ctx, In const& in, Out &out, auto init, std::pair<Op, Id> S, Func_T T)
     {
         kwk::transform("simd", T, out, in);
-        auto r_in  = make_range(in.get_data(), in.numel());
-        auto r_out = make_range(out.get_data(), out.numel());
-        eve::algo::inclusive_scan_to(r_in, r_out, S, init);
+        
+        if constexpr (Out::preserve_reachability && In::preserve_reachability)
+        {
+            
+            *out.get_data() = init;
+            auto r_in  = make_range(in.get_data(), in.numel() -1);
+            // rr : rotate right
+            auto r_outrr = make_range(out.get_data() +1, out.numel() -1);
+            eve::algo::inclusive_scan_to(r_in, r_outrr, S, init);
+        }
+        else
+        {  
+            auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
+            auto ext = kumi::get<0>(s);               
+            auto inn = kumi::get<0>(kumi::get<1>(s)); 
+            *out.get_data() = init;
+            kwk::__::for_each([&](auto... is)
+            {
+                auto r_in = make_range(&in(is...,0), inn -1);
+                // rr : rotate right
+                auto r_outrr = make_range(&in(is...,0) +1, inn -1);
+                eve::algo::inclusive_scan_to(r_in, r_outrr, S, init);
+
+            }, ext);
+        }        
     }
 
     /************************ Copy *********************************/
     //
     template<typename Context, concepts::container Out, concepts::container In>
-    constexpr auto copy(Context& ctx, Out& out, In const& in)
+    constexpr auto copy([[maybe_unused]] Context& ctx, Out& out, In const& in)
     {
         if constexpr (Out::preserve_reachability && In::preserve_reachability)
         {
@@ -196,11 +222,11 @@ namespace kwk
         }
     }
 
-    //
+    // Shall be eve::transform_copy_if
     template<typename Context, typename Func,
              concepts::container Out, concepts::container In
             >
-    constexpr auto copy_if(Context& ctx, Func f, Out& out, In const& in)
+    constexpr auto copy_if([[maybe_unused]] Context& ctx, Func f, Out& out, In const& in)
     {
         if constexpr (Out::preserve_reachability && In::preserve_reachability)
         {   
@@ -212,7 +238,7 @@ namespace kwk
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                             
-            auto inn = kumi::get<0>(kumi::get<1>(s));              
+            auto inn = kumi::get<0>(kumi::get<1>(s));    
             kwk::__::for_each([&](auto... is)
             {
                 auto r_in  = make_range(&in(is...,0), inn);
@@ -227,7 +253,7 @@ namespace kwk
     template<typename Context, typename Func,
              concepts::container In
             >
-    constexpr auto all_of(Context& ctx, In const& in, Func f)
+    constexpr auto all_of([[maybe_unused]] Context& ctx, In const& in, Func f)
     {
         if constexpr (In::preserve_reachability)
         {
@@ -255,7 +281,7 @@ namespace kwk
     template<typename Context, typename Func,
              concepts::container In
             >
-    constexpr auto any_of(Context& ctx, In const& in, Func f)
+    constexpr auto any_of([[maybe_unused]] Context& ctx, In const& in, Func f)
     {
         if constexpr (In::preserve_reachability)
         {
@@ -283,7 +309,7 @@ namespace kwk
     template<typename Context, typename Func,
              concepts::container In
             >
-    constexpr auto none_of(Context& ctx, In const& in, Func f)
+    constexpr auto none_of([[maybe_unused]] Context& ctx, In const& in, Func f)
     {
         if constexpr (In::preserve_reachability)
         {
@@ -307,17 +333,22 @@ namespace kwk
         }
     }
 
-    /********************* Finds *********************************/
+    /*
+        Count && count if arent specific simd algos, they just need to call
+        the standard algo with the simd context
+    */
+
+    /********************* Finds *********************************/ 
     //
     template<typename Context, concepts::container In>
-    constexpr auto find(Context& ctx, In const& in, auto value)
+    constexpr auto find([[maybe_unused]] Context& ctx, In const& in, auto value)
     {
         return find_if("simd", in, [&](auto e){return e == value;});
     }
 
     //
     template<typename Context, concepts::container In, typename Func>
-    constexpr auto find_if(Context& ctx, In const& in, Func f)
+    constexpr auto find_if([[maybe_unused]] Context& ctx, In const& in, Func f)
     {
         auto c = kumi::generate<In::static_order, std::ptrdiff_t>(0);
         using coords_t = decltype(c);
@@ -338,7 +369,7 @@ namespace kwk
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                 
-            auto inn = kumi::get<0>(kumi::get<1>(s));   
+            auto inn = kumi::get<0>(kumi::get<1>(s));    
             auto pos = std::optional<coords_t>{std::nullopt};
             auto rmd = in.get_data();
             
@@ -363,31 +394,36 @@ namespace kwk
 
     //
     template<typename Context, concepts::container In, typename Func>
-    constexpr auto find_if_not(Context& ctx, In const& in, Func f)
+    constexpr auto find_if_not([[maybe_unused]] Context& ctx, In const& in, Func f)
     {
         return kwk::find_if("simd", in, [f](auto x){return !f(x);});
     }
 
-    // Have to come back to this REALLY
+    //
     template<typename Context, concepts::container In, concepts::container Values>
-    constexpr auto find_first_of(Context& ctx, In const& in, Values const& values)
+    constexpr auto find_first_of([[maybe_unused]] Context& ctx, In const& in, Values const& values)
     {
-        return kwk::find_if(in, [&](auto e)
+        return kwk::find_if("simd",in, [&values](auto e)
         {
-            return kwk::any_of("simd", values, [&](auto x){return (x==e);});
+            // Weird workaround, cannot return the result of "any_of" directly
+            // due to EVE algos (kwk::find_if simd calls eve::find_if)
+            if (kwk::any_of("simd", values, [&](auto x){return (x==e);}))
+                return e == e;
+            else
+                return e != e;
         });
     }
     
     //
     template<typename Context, concepts::container In>
-    constexpr auto find_last(Context& ctx, In const& in, auto value)
+    constexpr auto find_last([[maybe_unused]] Context& ctx, In const& in, auto value)
     {
         return find_last_if("simd", in, [&](auto e){return e == value;});
     }
 
     //
     template<typename Context, concepts::container In, typename Func>
-    constexpr auto find_last_if(Context& ctx, In const& in, Func f)
+    constexpr auto find_last_if([[maybe_unused]] Context& ctx, In const& in, Func f)
     {
         auto c = kumi::generate<In::static_order, std::ptrdiff_t>(0);
         using coords_t = decltype(c);
@@ -402,15 +438,14 @@ namespace kwk
                 auto pos = kwk::coordinates(linear_pos, in.shape());
                 return std::optional<coords_t>{kumi::to_tuple(pos)};
             }
-            // Temporary
             return std::optional<coords_t>{std::nullopt};
         }
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                 
-            auto inn = kumi::get<0>(kumi::get<1>(s));   
-            auto pos = kumi::generate<In::static_order>(-1);
+            auto inn = kumi::get<0>(kumi::get<1>(s));    
+            auto pos = std::optional<coords_t>{std::nullopt};
             auto rmd = in.get_data();
 
             kwk::__::for_until([&](auto... is)
@@ -421,7 +456,7 @@ namespace kwk
                 {
                     auto linear_pos = find - rmd;
                     auto kwk_pos = kwk::coordinates(linear_pos, in.shape());
-                    pos = kumi::to_tuple(kwk_pos);
+                    pos = std::optional<coords_t>{kumi::to_tuple(kwk_pos)};
 
                     return true;
                 }
@@ -434,7 +469,7 @@ namespace kwk
 
     //
     template<typename Context, concepts::container In, typename Func>
-    constexpr auto find_last_if_not(Context& ctx, In const& in, Func f)
+    constexpr auto find_last_if_not([[maybe_unused]] Context& ctx, In const& in, Func f)
     {
         return kwk::find_last_if("simd", in, [f](auto x){return !f(x);});
     }
@@ -442,7 +477,7 @@ namespace kwk
     /*************************** GENERATOR ******************************/
     //
     template<typename Context, concepts::container Inout>
-    constexpr auto fill(Context &ctx, Inout& inout, auto value)
+    constexpr auto fill([[maybe_unused]] Context &ctx, Inout& inout, auto value)
     {
         if constexpr (Inout::preserve_reachability)
         {
@@ -463,20 +498,41 @@ namespace kwk
         }
     }
 
-    //
-    template<typename Context, typename Generator, concepts::container Inout>
-    constexpr auto generate(Context &ctx, Generator g, Inout& inout)
+    template <typename Wide_t> 
+    constexpr auto wide_to_coords(Wide_t const &wide, auto relative_pos)
     {
-        if constexpr (Inout::preserve_reachability)
-        {
+        auto span = eve::views::zip(eve::views::iota(relative_pos), wide);
+
+    }
+    
+    /*
+        Case generate on func with multi params
+
+        Generate is actually a eve::tranform_to from a range of tuples
+        containing the multi dim index of each value 
+
+        Base case :
+
+        Generate takes the current linear index of the container
+        and apply a eve::tranform_inplace
+    */
+    // THIS IS NOT OKAY
+    template<typename Context, typename Generator, concepts::container Inout>
+    constexpr auto generate([[maybe_unused]] Context &ctx, Generator g, Inout& inout)
+    {
+       // if constexpr (Inout::preserve_reachability)
+        //{
             auto r_inout = make_range(inout.get_data(), inout.numel());
-            eve::algo::transform_to(eve::views::iota(0), r_inout,
-                    [&](auto iota)
+            auto span = eve::views::zip(eve::views::iota(0), r_inout);
+
+            //test(inout.shape());
+            eve::algo::transform_to(span, r_inout,
+                    [&](auto i)
                     {
-                        return g(iota);
+                        return g(get<1>(i));
                     });
-        }
-        else
+            //}
+        /*else
         {
             auto s   = kumi::split(inout.shape(), kumi::index<Inout::static_order -1>);
             auto ext = kumi::get<0>(s);                
@@ -493,12 +549,12 @@ namespace kwk
                     });
 
             }, ext);
-        }
+        }*/
     }
 
     //
     template<typename Context, concepts::container Inout>
-    constexpr auto iota (Context& ctx, Inout& inout, auto value)
+    constexpr auto iota ([[maybe_unused]] Context& ctx, Inout& inout, auto value)
     {
         if constexpr (Inout::preserve_reachability)
         {
@@ -522,7 +578,7 @@ namespace kwk
 
     //
     template<typename Context, concepts::container Inout>
-    constexpr auto iota (Context& ctx, Inout& inout, auto value, auto step)
+    constexpr auto iota ([[maybe_unused]] Context& ctx, Inout& inout, auto value, auto step)
     {
         if constexpr (Inout::preserve_reachability)
         {

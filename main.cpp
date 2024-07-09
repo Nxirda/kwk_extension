@@ -75,8 +75,8 @@ int main(int argc, char **argv)
     
     auto scalar = kwk::view{kwk::source = copy, kwk::of_size(2,5)};
     auto vecto  = kwk::view{kwk::source = copy2, kwk::of_size(2,5)};
-    kwk::copy_if("simd", [](auto a){return a < 5;}, vecto, a_kwk);
-    kwk::copy_if([](auto a){return a < 5;}, scalar, a_kwk);
+    kwk::copy_if("simd", [](auto a){return a > 5;}, vecto, a_kwk);
+    kwk::copy_if([](auto a){return a > 5;}, scalar, a_kwk);
     std::cout << "Copy_if <5         :\n" << scalar << vecto << "\n";
 
     auto find1 = kwk::find("simd", a_kwk, 8);

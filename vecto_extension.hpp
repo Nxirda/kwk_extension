@@ -176,9 +176,9 @@ namespace kwk
             
             *out.get_data() = init;
             auto r_in  = make_range(in.get_data(), in.numel() -1);
-            // rr : rotate right
-            auto r_outrr = make_range(out.get_data() +1, out.numel() -1);
-            eve::algo::inclusive_scan_to(r_in, r_outrr, S, init);
+            // sr : shift right
+            auto r_outsr = make_range(out.get_data() +1, out.numel() -1);
+            eve::algo::inclusive_scan_to(r_in, r_outsr, S, init);
         }
         else
         {  
@@ -189,13 +189,19 @@ namespace kwk
             kwk::__::for_each([&](auto... is)
             {
                 auto r_in = make_range(&in(is...,0), inn -1);
-                // rr : rotate right
-                auto r_outrr = make_range(&in(is...,0) +1, inn -1);
-                eve::algo::inclusive_scan_to(r_in, r_outrr, S, init);
+                // sr : shift right
+                auto r_outsr = make_range(&in(is...,0) +1, inn -1);
+                eve::algo::inclusive_scan_to(r_in, r_outsr, S, init);
 
             }, ext);
         }        
     }
+
+    /*
+        No need to specifically vectorize exclusive_scan and inclusive_scan
+        they follow the std kwk model of calling the transform version with 
+        appropriate parameters
+    */
 
     /************************ Copy *********************************/
     //
@@ -228,12 +234,12 @@ namespace kwk
             >
     constexpr auto copy_if([[maybe_unused]] Context& ctx, Func f, Out& out, In const& in)
     {
-        if constexpr (Out::preserve_reachability && In::preserve_reachability)
-        {   
+        /* if constexpr (Out::preserve_reachability && In::preserve_reachability)
+        {  */  
             auto r_in  = make_range(in.get_data(), in.numel());
             auto r_out = make_range(out.get_data(), out.numel());
             eve::algo::copy_if(r_in, r_out, f);
-        }
+        /* }
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
@@ -245,7 +251,7 @@ namespace kwk
                 auto r_out = make_range(&out(is...,0), inn);
                 eve::algo::copy_if(r_in, r_out, f);
             }, ext);
-        }
+        } */
     }
 
     /********************* Predicates *********************************/

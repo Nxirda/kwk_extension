@@ -15,7 +15,6 @@ namespace kwk
         return eve::algo::as_range(p, p+n);
     }
 
-
     /********************* Transform  *********************************/
     // Context signature isnt correct ofc (simplified)
     template<typename Context, typename Func, concepts::container Out
@@ -503,13 +502,6 @@ namespace kwk
             }, ext);
         }
     }
-
-    template <typename Wide_t> 
-    constexpr auto wide_to_coords(Wide_t const &wide, auto relative_pos)
-    {
-        auto span = eve::views::zip(eve::views::iota(relative_pos), wide);
-
-    }
     
     /*
         Case generate on func with multi params
@@ -520,8 +512,18 @@ namespace kwk
         Base case :
 
         Generate takes the current linear index of the container
-        and apply a eve::tranform_inplace
+        and apply a eve::transform_inplace
     */
+
+   // debugging aid
+    template<typename T, T... ints>
+    void print_sequence(std::integer_sequence<T, ints...> int_seq)  
+    {
+        std::cout << "The sequence of size " << int_seq.size() << ": ";
+        ((std::cout << ints << ' '), ...);
+        std::cout << '\n';
+    }
+
     // THIS IS NOT OKAY
     template<typename Context, typename Generator, concepts::container Inout>
     constexpr auto generate([[maybe_unused]] Context &ctx, Generator g, Inout& inout)
@@ -529,13 +531,18 @@ namespace kwk
        // if constexpr (Inout::preserve_reachability)
         //{
             auto r_inout = make_range(inout.get_data(), inout.numel());
-            auto span = eve::views::zip(eve::views::iota(0), r_inout);
+
+            auto test = std::make_index_sequence<30>();
+            print_sequence(test);
+            //auto span = eve::views::zip(eve::views::iota(0), r_inout);
+
+            //auto t = eve::algo::views::convert(r_inout, eve::as<kumi::tuple<std::size_t>>{});
 
             //test(inout.shape());
-            eve::algo::transform_to(span, r_inout,
+            eve::algo::transform_to(r_inout, r_inout,
                     [&](auto i)
                     {
-                        return g(get<1>(i));
+                        return g(i);
                     });
             //}
         /*else

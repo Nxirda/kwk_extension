@@ -76,7 +76,7 @@ TTS_CASE("Check for kwk::fill(out, value) 4D")
   TTS_ALL_EQUAL(data, vdata);
 };
 
-/* TTS_CASE("Check for kwk::generate(out, func) 1D")
+TTS_CASE("Check for kwk::generate(out, func) 1D")
 {
   int data[2];
   int vdata[2];
@@ -95,7 +95,7 @@ TTS_CASE("Check for kwk::fill(out, value) 4D")
 
   TTS_ALL_EQUAL(data, vdata);
   TTS_EQUAL(count, d.numel());
-}; */
+}; 
 /* 
 TTS_CASE("Check for kwk::generate(out, func) 2D")
 {

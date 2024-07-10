@@ -227,18 +227,22 @@ namespace kwk
         }
     }
 
-    // Shall be eve::transform_copy_if
+    // 
     template<typename Context, typename Func,
              concepts::container Out, concepts::container In
             >
-    constexpr auto copy_if([[maybe_unused]] Context& ctx, Func f, Out& out, In const& in)
+    constexpr auto copy_if([[maybe_unused]] Context& ctx, [[maybe_unused]]Func f, Out& out, In const& in)
     {
-        /* if constexpr (Out::preserve_reachability && In::preserve_reachability)
-        {  */  
+        if constexpr (Out::preserve_reachability && In::preserve_reachability)
+        { 
             auto r_in  = make_range(in.get_data(), in.numel());
             auto r_out = make_range(out.get_data(), out.numel());
-            eve::algo::copy_if(r_in, r_out, f);
-        /* }
+            
+            eve::algo::transform_to(r_in, r_out, [&f](auto w)
+                {
+                    return eve::if_else(f(w), w, 0);
+                });
+        }
         else
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
@@ -248,9 +252,14 @@ namespace kwk
             {
                 auto r_in  = make_range(&in(is...,0), inn);
                 auto r_out = make_range(&out(is...,0), inn);
-                eve::algo::copy_if(r_in, r_out, f);
+
+                eve::algo::transform_to(r_in, r_out, [&f](auto w)
+                    {
+                        return eve::if_else(f(w), w, 0);
+                    });
+
             }, ext);
-        } */
+        }
     }
 
     /********************* Predicates *********************************/
@@ -515,7 +524,7 @@ namespace kwk
         and apply a eve::transform_inplace
     */
 
-   // debugging aid
+    // 
     template<typename T, T... ints>
     void print_sequence(std::integer_sequence<T, ints...> int_seq)  
     {
@@ -524,7 +533,7 @@ namespace kwk
         std::cout << '\n';
     }
 
-    // THIS IS NOT OKAY
+    // 
     template<typename Context, typename Generator, concepts::container Inout>
     constexpr auto generate([[maybe_unused]] Context &ctx, Generator g, Inout& inout)
     {

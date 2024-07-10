@@ -14,11 +14,11 @@ template<typename Container>
 void bench_transform(Container &a_kwk, Container &b_kwk, Container &c_kwk)
 {
     auto start = std::chrono::high_resolution_clock::now();
-    kwk::transform("simd", [](auto e){return eve::cos(eve::exp(eve::sqrt(e)));}, b_kwk, a_kwk);
+    kwk::transform("simd", [](auto e, auto e2){return eve::cos(eve::exp(eve::sqrt(e * 1/e2)));}, b_kwk, a_kwk, a_kwk);
     auto stop = std::chrono::high_resolution_clock::now();
 
     auto start_std = std::chrono::high_resolution_clock::now();
-    kwk::transform(        [](auto e){return eve::cos(eve::exp(eve::sqrt(e)));}, c_kwk, a_kwk);
+    kwk::transform(        [](auto e, auto e2){return eve::cos(eve::exp(eve::sqrt(e * 1/e2)));}, c_kwk, a_kwk, a_kwk);
     auto stop_std = std::chrono::high_resolution_clock::now();
 
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
@@ -283,6 +283,32 @@ void bench_copy(Container &a_kwk, Container &b_kwk, Container &c_kwk)
 
 //
 template<typename Container>
+void bench_copy_if(Container &a_kwk, Container &b_kwk, Container &c_kwk)
+{
+    auto start = std::chrono::high_resolution_clock::now();
+    kwk::copy_if("simd", [&](auto e){return e >= 5 && e < SIZE - 15;}, b_kwk, a_kwk);
+    auto stop = std::chrono::high_resolution_clock::now();
+
+    auto start_std = std::chrono::high_resolution_clock::now();
+    kwk::copy_if(        [&](auto e){return e >= 5 && e < SIZE - 15;}, c_kwk, a_kwk);
+    auto stop_std = std::chrono::high_resolution_clock::now();
+
+    auto duration     = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
+    auto duration_std = std::chrono::duration_cast<std::chrono::microseconds>(stop_std - start_std).count();
+
+    double t_per_elem     = static_cast<double>(duration)/SIZE;
+    double t_per_elem_std = static_cast<double>(duration_std)/SIZE;
+
+    std::cout << "=== Copy_if ===\n";
+    std::cout << "Simd duration         : " << duration       << " microseconds" << std::endl;
+    std::cout << "duration              : " << duration_std   << " microseconds" << std::endl;
+    std::cout << "Time per element simd : " << t_per_elem     << " microseconds" << std::endl;
+    std::cout << "Time per element      : " << t_per_elem_std << " microseconds" << std::endl;
+    std::cout << std::endl;
+}
+
+//
+template<typename Container>
 void bench_find(Container &a_kwk)
 {
     auto start = std::chrono::high_resolution_clock::now();
@@ -496,11 +522,11 @@ template<typename Container>
 void bench_fill(Container &a_kwk)
 {
     auto start = std::chrono::high_resolution_clock::now();
-    kwk::fill("simd", a_kwk, 1.0f);
+    kwk::fill("simd", a_kwk, 1.0f/80.0);
     auto stop = std::chrono::high_resolution_clock::now();
 
     auto start_std = std::chrono::high_resolution_clock::now();
-    kwk::fill(        a_kwk, 1.0f);
+    kwk::fill(        a_kwk, 1.0f/80.0);
     auto stop_std = std::chrono::high_resolution_clock::now();
 
     auto duration     = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
@@ -632,6 +658,9 @@ int main(int argc, char **argv)
     bench_iota(a_kwk);
     
     bench_iota_step(a_kwk);
+
+    bench_copy(a_kwk, b_kwk, c_kwk);
+    bench_copy_if(a_kwk, b_kwk, c_kwk);
     /* std::vector<f32> copy (SIZE);
     std::vector<f32> copy2(SIZE);
      */

@@ -124,18 +124,13 @@ TTS_CASE("Check for kwk::copy_if(func, out, in) 2D")
   
   auto d = kwk::view{kwk::source = data, kwk::of_size(2,3)};
   auto r = kwk::view{kwk::source = rdata, kwk::of_size(2,3)};
-  
-  std::cout << d << "\n";
-  std::cout << r << "\n"; 
+  auto v = kwk::view{kwk::source = vdata, kwk::of_size(2,3)}; 
 
   kwk::copy_if("simd",[&](auto e)
   {
-    return (e==2);
+    return (e==10);
   }
   ,r, d);
-
-  std::cout << d << "\n";
-  std::cout << r << "\n"; 
 
   TTS_ALL_EQUAL(rdata, vdata);
 };

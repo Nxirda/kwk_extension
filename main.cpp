@@ -664,7 +664,10 @@ int main(int argc, char **argv)
     /* std::vector<f32> copy (SIZE);
     std::vector<f32> copy2(SIZE);
      */
-   
+
+    std::cerr << a[0] << " | " << a[SIZE -1] << "\n";
+    std::cerr << b[0] << " | " << b[SIZE -1] << "\n";
+    std::cerr << c[0] << " | " << c[SIZE -1] << "\n";
 
     return 0;
 }

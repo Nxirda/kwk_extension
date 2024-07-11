@@ -30,7 +30,7 @@ namespace kwk
             
             eve::algo::transform_to(zipped, r_out, [&f](auto const &in){return kumi::apply(f, in);});
         }
-        else 
+        else if constexpr (out.stride::is_unit && c0.stride::is_unit && (cs.stride::is_unit && ...)) 
         {
             auto s   = kumi::split(c0.shape(), kumi::index<C0::static_order -1>);
             auto ext = kumi::get<0>(s);
@@ -41,6 +41,10 @@ namespace kwk
                 auto zipped = eve::views::zip(make_range(&c0(is...,0), in), make_range(&cs(is...,0), in)...);
                 eve::algo::transform_to(zipped, r_out, [&f](auto const &in){return kumi::apply(f, in);});
             }, ext);
+        }
+        else
+        {
+            kwk::transform("cpu", f, out, c0, cs...);
         }
     }
    
@@ -54,7 +58,7 @@ namespace kwk
             auto r_in = make_range(in.get_data(), in.numel());
             return eve::algo::reduce(r_in, typename In::value_type{});
         }
-        else
+        else if constexpr (in.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                             
@@ -68,6 +72,10 @@ namespace kwk
             
             return acc;
         }
+        else
+        {
+            kwk::reduce("cpu", in);
+        }
     }
 
     //     
@@ -79,7 +87,7 @@ namespace kwk
             auto r_in = make_range(in.get_data(), in.numel());
             return eve::algo::reduce(r_in, R, init);
         }
-        else
+        else if constexpr (in.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                             
@@ -92,6 +100,10 @@ namespace kwk
             }, ext);
             
             return acc;
+        }
+        else
+        {
+            kwk::reduce("cpu", in, R, init);
         }
     }
 
@@ -110,7 +122,7 @@ namespace kwk
 
             return eve::algo::transform_reduce(zipped, [&T](auto const& in){return kumi::apply(T, in);}, R, init);
         }
-        else
+        else if constexpr (in1.stride::is_unit && in2.stride::is_unit)
         {
             auto s   = kumi::split(in1.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                             
@@ -127,6 +139,10 @@ namespace kwk
             }, ext);
             
             return acc;
+        }
+        else
+        {
+            kwk::transform_reduce("cpu", in1, in2, init, R, T);
         }
     }
   
@@ -150,7 +166,7 @@ namespace kwk
             auto r_out = make_range(out.get_data(), out.numel());
             eve::algo::inclusive_scan_inplace(r_out, S, init);
         }
-        else
+        else if constexpr (in.stride::is_unit && out.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);               
@@ -160,6 +176,10 @@ namespace kwk
                 auto r_out = make_range(&out(is...,0), inn);
                 eve::algo::inclusive_scan_inplace(r_out, S, init);
             }, ext);
+        }
+        else
+        {
+            kwk::transform_inclusive_scan("cpu", in, out, init, S, T);
         }
     }
 
@@ -179,7 +199,7 @@ namespace kwk
             auto r_outsr = make_range(out.get_data() +1, out.numel() -1);
             eve::algo::inclusive_scan_to(r_in, r_outsr, S, init);
         }
-        else
+        else if constexpr (in.stride::is_unit && out.stride::is_unit)
         {  
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);               
@@ -193,7 +213,11 @@ namespace kwk
                 eve::algo::inclusive_scan_to(r_in, r_outsr, S, init);
 
             }, ext);
-        }        
+        }
+        else
+        {
+            kwk::transform_exclusive_scan("cpu", in , out, init, S, T);
+        }
     }
 
     /*
@@ -213,7 +237,7 @@ namespace kwk
             auto r_out = make_range(out.get_data(), out.numel());
             eve::algo::copy(r_in, r_out);
         }
-        else
+        else if constexpr (out.stride::is_unit && in.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                
@@ -224,6 +248,10 @@ namespace kwk
                 auto r_out = make_range(&out(is...,0), inn);
                 eve::algo::copy(r_in, r_out);
             }, ext);
+        }
+        else
+        {
+            kwk::copy("cpu", out, in);
         }
     }
 
@@ -243,7 +271,7 @@ namespace kwk
                     return eve::if_else(f(w), w, 0);
                 });
         }
-        else
+        else if constexpr (out.stride::is_unit && in.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                             
@@ -260,6 +288,10 @@ namespace kwk
 
             }, ext);
         }
+        else
+        {
+            kwk::copy_if("cpu", f, out, in);
+        }
     }
 
     /********************* Predicates *********************************/
@@ -274,7 +306,7 @@ namespace kwk
             auto r_in = make_range(in.get_data(), in.numel());
             return eve::algo::all_of(r_in, f);
         }
-        else
+        else if constexpr (in.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                
@@ -289,6 +321,10 @@ namespace kwk
 
             return b;
         }
+        else
+        {
+            kwk::all_of("cpu", in, f);
+        }
     }
 
     //
@@ -302,7 +338,7 @@ namespace kwk
             auto r_in = make_range(in.get_data(), in.numel());
             return eve::algo::any_of(r_in, f);
         }
-        else
+        else if constexpr (in.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                
@@ -317,6 +353,10 @@ namespace kwk
 
             return b;
         }
+        else
+        {
+            kwk::any_of("cpu", in, f);
+        }
     }
 
     //
@@ -330,7 +370,7 @@ namespace kwk
             auto r_in = make_range(in.get_data(), in.numel());
             return eve::algo::none_of(r_in, f);
         }
-        else
+        else if constexpr (in.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);              
@@ -344,6 +384,10 @@ namespace kwk
             }, ext);
 
             return b;
+        }
+        else
+        {
+            kwk::none_of("cpu", in, f);
         }
     }
 
@@ -379,7 +423,7 @@ namespace kwk
             }
             return std::optional<coords_t>{std::nullopt};
         }
-        else
+        else if (in.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                 
@@ -403,6 +447,10 @@ namespace kwk
             }, ext);
 
             return pos;
+        }
+        else
+        {
+            kwk::find_if("cpu", in, f);
         }
     }
 
@@ -454,7 +502,7 @@ namespace kwk
             }
             return std::optional<coords_t>{std::nullopt};
         }
-        else
+        else if constexpr (in.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                 
@@ -479,6 +527,10 @@ namespace kwk
 
             return pos;
         }
+        else
+        {
+            kwk::find_last_if("cpu", in, f);
+        }
     }
 
     //
@@ -498,7 +550,7 @@ namespace kwk
             auto r_inout = make_range(inout.get_data(), inout.numel());
             eve::algo::fill(r_inout, value);
         }
-        else
+        else if constexpr(inout.stride::is_unit)
         {
             auto s   = kumi::split(inout.shape(), kumi::index<Inout::static_order -1>);
             auto ext = kumi::get<0>(s);                
@@ -509,6 +561,10 @@ namespace kwk
                 auto r_inout = make_range(&inout(is...,0), inn);
                 eve::algo::fill(r_inout, value);
             }, ext);
+        }
+        else
+        {
+            kwk::fill("cpu", inout, value);
         }
     }
     
@@ -523,16 +579,6 @@ namespace kwk
         Generate takes the current linear index of the container
         and apply a eve::transform_inplace
     */
-
-    // 
-    template<typename T, T... ints>
-    void print_sequence(std::integer_sequence<T, ints...> int_seq)  
-    {
-        std::cout << "The sequence of size " << int_seq.size() << ": ";
-        ((std::cout << ints << ' '), ...);
-        std::cout << '\n';
-    }
-
     // 
     template<typename Context, typename Generator, concepts::container Inout>
     constexpr auto generate([[maybe_unused]] Context &ctx, Generator g, Inout& inout)
@@ -541,8 +587,6 @@ namespace kwk
         //{
             auto r_inout = make_range(inout.get_data(), inout.numel());
 
-            auto test = std::make_index_sequence<30>();
-            print_sequence(test);
             //auto span = eve::views::zip(eve::views::iota(0), r_inout);
 
             //auto t = eve::algo::views::convert(r_inout, eve::as<kumi::tuple<std::size_t>>{});
@@ -583,7 +627,7 @@ namespace kwk
             auto r_inout = make_range(inout.get_data(), inout.numel());
             eve::algo::iota(r_inout, value);
         }
-        else
+        else if constexpr (inout.stride::is_unit)
         {
             auto s   = kumi::split(inout.shape(), kumi::index<Inout::static_order -1>);
             auto ext = kumi::get<0>(s);                
@@ -595,6 +639,10 @@ namespace kwk
                 eve::algo::iota(r_inout, acc);
                 acc += inn;
             }, ext);
+        }
+        else
+        {
+            kwk::iota("cpu", inout, value);
         }
     }
 
@@ -611,7 +659,7 @@ namespace kwk
                         return iota;
                     });
         }
-        else
+        else if constexpr (inout.stride::is_unit)
         {
             auto s   = kumi::split(inout.shape(), kumi::index<Inout::static_order -1>);
             auto ext = kumi::get<0>(s);                
@@ -627,6 +675,10 @@ namespace kwk
                     });
                 acc += step*inn;
             }, ext);
+        }
+        else
+        {
+            kwk::iota("cpu", inout, value, step);
         }
     }
 }

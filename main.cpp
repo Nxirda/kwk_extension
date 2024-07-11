@@ -1,10 +1,13 @@
 #include "vecto_extension.hpp"
 #include <eve/module/math.hpp>
 
+#include <vector>
 #include <chrono>
 #include <iostream>
-#include <vector>
+#include <random>
 #include <numeric>
+#include <algorithm>
+#include <iterator>
 
 using f32 = float;
 #define SIZE 10000000
@@ -546,14 +549,14 @@ void bench_fill(Container &a_kwk)
 
 //
 template<typename Container>
-void bench_iota(Container &a_kwk)
+void bench_iota(Container &a_kwk, Container &b_kwk)
 {
     auto start = std::chrono::high_resolution_clock::now();
     kwk::iota("simd", a_kwk, 5);
     auto stop = std::chrono::high_resolution_clock::now();
 
     auto start_std = std::chrono::high_resolution_clock::now();
-    kwk::iota(        a_kwk, 3);
+    kwk::iota(        b_kwk, 3);
     auto stop_std = std::chrono::high_resolution_clock::now();
 
     auto duration     = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
@@ -573,14 +576,14 @@ void bench_iota(Container &a_kwk)
 
 //
 template<typename Container>
-void bench_iota_step(Container &a_kwk)
+void bench_iota_step(Container &a_kwk, Container &b_kwk)
 {
     auto start = std::chrono::high_resolution_clock::now();
     kwk::iota("simd", a_kwk, 5, 2);
     auto stop = std::chrono::high_resolution_clock::now();
 
     auto start_std = std::chrono::high_resolution_clock::now();
-    kwk::iota(        a_kwk, 3, 2);
+    kwk::iota(       b_kwk, 3, 2);
     auto stop_std = std::chrono::high_resolution_clock::now();
 
     auto duration     = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
@@ -654,10 +657,18 @@ int main(int argc, char **argv)
     bench_find_first_of(a_kwk, b_kwk, c_kwk); */
 
     bench_fill(a_kwk);
-
-    bench_iota(a_kwk);
     
-    bench_iota_step(a_kwk);
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(a.begin(), a.end(), g); 
+    std::shuffle(b.begin(), b.end(), g);
+    
+    bench_iota(a_kwk, b_kwk);
+    
+    std::shuffle(a.begin(), a.end(), g); 
+    std::shuffle(b.begin(), b.end(), g);
+
+    bench_iota_step(a_kwk, b_kwk);
 
     bench_copy(a_kwk, b_kwk, c_kwk);
     bench_copy_if(a_kwk, b_kwk, c_kwk);
@@ -668,7 +679,7 @@ int main(int argc, char **argv)
     std::cerr << a[0] << " | " << a[SIZE -1] << "\n";
     std::cerr << b[0] << " | " << b[SIZE -1] << "\n";
     std::cerr << c[0] << " | " << c[SIZE -1] << "\n";
-
+        
     return 0;
 }
 

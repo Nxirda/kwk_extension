@@ -1,0 +1,12 @@
+QUICK REMARKS
+================================================================================
+
+1) For reductions we might need the same syntax in kwk than in eve with 
+    std::pair<Op,Neutral Elem>
+    With this we might need like : kwk::add, kwk::sub, kwk::mul, ...
+
+2) We will need something to generate a wide of positions for functions such
+   as map_index, generate, ...
+
+3) Perf problems with iota, fill, copy, they are not that good vectorized for
+   some reason ? 

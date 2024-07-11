@@ -19,6 +19,9 @@ find_package(kumi CONFIG REQUIRED)
 add_executable(main main.cpp)
 target_link_libraries(main PRIVATE kiwaku::kiwaku eve::eve kumi::kumi)
 
+add_executable(tile main_tile.cpp)
+target_link_libraries(tile PRIVATE kiwaku::kiwaku eve::eve kumi::kumi)
+
 include(CTest)
 add_custom_target(unit)
 add_subdirectory(test)

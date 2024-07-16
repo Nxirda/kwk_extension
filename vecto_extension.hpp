@@ -408,8 +408,7 @@ namespace kwk
     template<typename Context, concepts::container In, typename Func>
     constexpr auto find_if([[maybe_unused]] Context& ctx, In const& in, Func f)
     {
-        auto c = kumi::generate<In::static_order, std::ptrdiff_t>(0);
-        using coords_t = decltype(c);
+        using coords_t = decltype(kumi::generate<In::static_order, std::ptrdiff_t>(0));
 
         if constexpr (In::preserve_reachability)
         {
@@ -423,7 +422,7 @@ namespace kwk
             }
             return std::optional<coords_t>{std::nullopt};
         }
-        else if (in.stride::is_unit)
+        else if constexpr (in.stride::is_unit)
         {
             auto s   = kumi::split(in.shape(), kumi::index<In::static_order -1>);
             auto ext = kumi::get<0>(s);                 
@@ -487,9 +486,8 @@ namespace kwk
     template<typename Context, concepts::container In, typename Func>
     constexpr auto find_last_if([[maybe_unused]] Context& ctx, In const& in, Func f)
     {
-        auto c = kumi::generate<In::static_order, std::ptrdiff_t>(0);
-        using coords_t = decltype(c);
-
+        using coords_t = decltype(kumi::generate<In::static_order, std::ptrdiff_t>(0));
+        
         if constexpr (In::preserve_reachability)
         {
             auto r_in = make_range(in.get_data(), in.numel());
@@ -589,8 +587,6 @@ namespace kwk
 
             //auto span = eve::views::zip(eve::views::iota(0), r_inout);
 
-            //auto t = eve::algo::views::convert(r_inout, eve::as<kumi::tuple<std::size_t>>{});
-
             //test(inout.shape());
             eve::algo::transform_to(r_inout, r_inout,
                     [&](auto i)
@@ -653,11 +649,7 @@ namespace kwk
         if constexpr (Inout::preserve_reachability)
         {
             auto r_inout = make_range(inout.get_data(), inout.numel());
-            eve::algo::transform_to(eve::views::iota_with_step(value, step), r_inout,
-                    [&](auto iota)
-                    {
-                        return iota;
-                    });
+            eve::algo::copy(eve::views::iota_with_step(value, step), r_inout);
         }
         else if constexpr (inout.stride::is_unit)
         {
@@ -668,11 +660,7 @@ namespace kwk
             kwk::__::for_each([&](auto... is)
             {
                 auto r_inout = make_range(&inout(is...,0), inn);
-                eve::algo::transform_to(eve::views::iota_with_step(acc, step), r_inout,
-                    [&](auto iota)
-                    {
-                        return iota;
-                    });
+                eve::algo::copy(eve::views::iota_with_step(acc, step), r_inout);
                 acc += step*inn;
             }, ext);
         }
